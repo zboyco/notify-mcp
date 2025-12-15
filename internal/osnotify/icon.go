@@ -15,12 +15,31 @@ var (
 	pngOnce sync.Once
 	pngPath string
 	pngErr  error
+	pngMu   sync.Mutex
 )
 
 func ensurePNGPath() (string, error) {
 	pngOnce.Do(func() {
 		pngPath, pngErr = writeTempPNG()
 	})
+	if pngErr != nil {
+		return "", pngErr
+	}
+
+	if _, err := os.Stat(pngPath); err == nil {
+		return pngPath, nil
+	}
+
+	// 临时文件被系统清理后需要重新写入。
+	pngMu.Lock()
+	defer pngMu.Unlock()
+
+	// 双重检查，避免并发重复写文件。
+	if _, err := os.Stat(pngPath); err == nil {
+		return pngPath, nil
+	}
+
+	pngPath, pngErr = writeTempPNG()
 	return pngPath, pngErr
 }
 
